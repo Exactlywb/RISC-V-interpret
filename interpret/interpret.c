@@ -38,6 +38,8 @@ static int RunParser (const char* buffer, const off_t bufferSize) {
 
 }
 
+//!TODO remove this terrible defines.
+
 #define CALC_RD (command [COMMAND_SIZE - 1] >> 7) +         \
                 (command [COMMAND_SIZE - 2] & 0b00001111) * 2
 
@@ -52,6 +54,10 @@ static int RunParser (const char* buffer, const off_t bufferSize) {
 #define CALC_RS2    (command [COMMAND_SIZE - 3] >> 4)
 
 #define CALC_FRONT_MAGIC_CONST command [COMMAND_SIZE - 4]
+
+#define CALC_BIG_IMM    (command [COMMAND_SIZE - 2] >> 4)   + \
+                        command [COMMAND_SIZE - 3] << 4     + \
+                        command [COMMAND_SIZE - 4] << 12
 
 static int FirstOpGroupHandle   (const int frontConst, const int rs2, const int rs1,
                                 const int middleConst, const int rd) { //add, sub, xor, or, and
@@ -176,6 +182,30 @@ static int FourthOpGroupHandle (const int frontImm, const int rs2, const int rs1
 
 }
 
+static int BranchOpsHandle (const int frontImm, const int rs2, const int rs1,
+                            const int middleConst, const int lastImm) {
+
+    switch (middleConst) {
+
+        case 0b000:
+            return beq (...);
+        case 0b001:
+            return bne (...);
+        case 0b100:
+            return blt (...);
+        case 0b101:
+            return bge (...);
+        case 0b110:
+            return bltu (...);
+        case 0b111:
+            return bgeu (...);
+
+    }
+
+    return -1;
+
+}
+
 static int HandleCommand (const unsigned char* command) {
 
     int opcode = (*(command + COMMAND_SIZE - 1)) & 0b01111111;
@@ -228,6 +258,48 @@ static int HandleCommand (const unsigned char* command) {
 
             return FourthOpGroupHandle (frontImm, rs2, rs1, magicConst, lastImm);
 
+        }
+        case fifthOpGroup: { //lui
+
+            int rd = CALC_RD;
+
+            int imm = CALC_BIG_IMM;
+
+            return lui (...);
+
+        }
+        case sixthOpGroup: { //jal
+
+            int rd = CALC_RD;
+            
+            int imm = CALC_BIG_IMM;
+
+            return jal (...);
+
+        }
+        case seventhOpGroup: { //jalr
+
+            int rd          = CALC_RD;
+            int magicConst  = CALC_MAGIC_CONST;
+            int rs1         = CALC_RS1;
+
+            int imm         = CALC_IMM;
+
+            return jalr (...);
+
+        }
+        case eightthOpGroup: { //beq, bne, blt, bge, bltu, bgeu
+
+            int lastImm     = CALC_RD;
+            int middleConst = CALC_MAGIC_CONST;
+            
+            int rs1         = CALC_RS1;
+            int rs2         = CALC_RS2;
+
+            int frontImm    = CALC_FRONT_MAGIC_CONST;
+
+            return BranchOpsHandle (frontImm, rs2, rs1, middleConst, lastImm);
+            
         }
         default:
             printf ("Unexpected opcode %d\n", opcode);
