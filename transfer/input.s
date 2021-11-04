@@ -1,1 +1,2 @@
-addi x2, x0, 12
+addi x0, x0, 15
+addi x5, x2, 15
