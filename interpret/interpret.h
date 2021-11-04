@@ -2,6 +2,7 @@
 #define INTERPRET_H__
 
 #include "../common.h"
+#include "../execution/execution.h"
 
 typedef enum Opcodes {
 

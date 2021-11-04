@@ -12,6 +12,9 @@ set(EXEC_FILE "interpretator")
 
 set(HEADERS
 
+    common.h
+    execution/physmemory.h
+    execution/execution.h
     interpret/interpret.h
 
 )
@@ -19,6 +22,7 @@ set(HEADERS
 set(SOURCES
 
     main.c
+    execution/execution.c
     interpret/interpret.c
 
 )

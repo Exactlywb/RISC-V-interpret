@@ -1,7 +1,7 @@
 #include "interpret.h"
 
-static      int     RunParser       (const char* buffer, const off_t bufferSize);
-static      int     HandleCommand   (const unsigned char* command);
+static      int     RunParser       (const unsigned char* buffer, const off_t bufferSize, State *mainState);
+static      int     HandleCommand   (const unsigned char* command, State *mainState);
 
 int RunInterpret (const int input) {
 
@@ -10,7 +10,7 @@ int RunInterpret (const int input) {
     off_t fileSize = GetFileSize (input);
     SECURITY_FUNCTION (fileSize <= 0, {}, (int)fileSize);
 
-    char* buffer = (char*)calloc ((size_t)fileSize, sizeof (char));
+    unsigned char* buffer = (unsigned char*)calloc ((size_t)fileSize, sizeof (*buffer));
     SECURITY_FUNCTION (IS_NULL (buffer), {printf ("Bad alloc for char* buffer in function %s\n"
                                                     , __func__);}, -1);
 
@@ -18,7 +18,9 @@ int RunInterpret (const int input) {
     SECURITY_FUNCTION (readErr < 0, {free (buffer);
                                      perror ("Bad read from input file");}, errno);
 
-    int parseErr = RunParser (buffer, fileSize);
+    State mainState = {};
+
+    int parseErr = RunParser (buffer, fileSize, &mainState);
     SECURITY_FUNCTION (parseErr != 0, {free (buffer);}, parseErr);
 
     free (buffer);
@@ -29,76 +31,66 @@ int RunInterpret (const int input) {
 
 #define COMMAND_SIZE 4
 
-static int RunParser (const char* buffer, const off_t bufferSize) {
+static int RunParser (const unsigned char* buffer, const off_t bufferSize, State *mainState) {
 
     for (off_t curBufInd = 0; curBufInd < bufferSize; curBufInd += 4)
-        HandleCommand ((unsigned char*)(buffer + curBufInd));
+        HandleCommand (buffer + curBufInd, mainState);
 
     return 0;
 
 }
 
-//!TODO remove this terrible defines.
+static uint32_t GetBites (const unsigned char* command, const int start, const int end) {
+    //!TODO maybe there's the opportunity to optimize this function
 
-#define CALC_RD (command [COMMAND_SIZE - 1] >> 7) +         \
-                (command [COMMAND_SIZE - 2] & 0b00001111) * 2
+    uint32_t res = 0;
 
-#define CALC_MAGIC_CONST command [COMMAND_SIZE - 2] & 0b01110000
+    for (int i = start; i <= end; i++)
+        res |= ((command [3 - i / 8] >> (i % 8)) & 1) << (i - start);
 
-#define CALC_RS1    (command [COMMAND_SIZE - 2] >> 7) +     \
-                    (command [COMMAND_SIZE - 3] & 0b00001111) * 2
+    return res;
 
-#define CALC_IMM    (command [COMMAND_SIZE - 3] >> 4) +     \
-                    (command [COMMAND_SIZE - 4] & 0b01111111) * 16
-
-#define CALC_RS2    (command [COMMAND_SIZE - 3] >> 4)
-
-#define CALC_FRONT_MAGIC_CONST command [COMMAND_SIZE - 4]
-
-#define CALC_BIG_IMM    (command [COMMAND_SIZE - 2] >> 4)   + \
-                        command [COMMAND_SIZE - 3] << 4     + \
-                        command [COMMAND_SIZE - 4] << 12
+}
 
 static int FirstOpGroupHandle   (const int frontConst, const int rs2, const int rs1,
-                                const int middleConst, const int rd) { //add, sub, xor, or, and
-    
+                                const int middleConst, const int rd, State* state) { //add, sub, xor, or, and
+
     switch (middleConst) {
 
         case 0b000: { //add, sub
 
             if (frontConst == 0)
-                return add (...);
+                return ImplAdd (state, rs1, rs2, rd);
             else if (frontConst == 32)
-                return sub (...);
+                return ImplSub (state, rs1, rs2, rd);
             
             return -1;
 
         }
         case 0b100: //xor
-            return xor (...);
+            return ImplXor  (state, rs1, rs2, rd);
         case 0b110: //or
-            return or (...);
+            return ImplOr   (state, rs1, rs2, rd);
         case 0b111: //and
-            return and (...);
+            return ImplAnd  (state, rs1, rs2, rd);
 
     }
     
     return -1;
 
 }
-//!TODO check signed nums
 
-static int HandleShifts (const int frontConst, const int shamt, const int rs1,
-                        const int middleConst, const int rd) {
+static int HandleShifts (const uint32_t frontConst, const uint32_t shamt, const uint32_t rs1,
+                        const uint32_t middleConst, const uint32_t rd, State* state) {
 
     if (middleConst == 0b001) //slli
-        return slli (...);
+        return ImplSllI (state, shamt, rs1, rd);
     else if (middleConst == 0b101) { //srli or srai
 
-        if (frontConst == 0) //srli
-            return srli (...);
+        if (frontConst == 0)//srli 
+            return ImplSrlI (state, shamt, rs1, rd);
         else if (frontConst == 32) //srai
-            return srai (...);
+            return ImplSraI (state, shamt, rs1, rd);
 
     }
 
@@ -106,57 +98,60 @@ static int HandleShifts (const int frontConst, const int shamt, const int rs1,
 
 }
 
-static int HandleArithWithInt (const int imm, const int rs1, const int middleConst, const int rd) {
+static int HandleArithWithInt   (const uint32_t imm, const uint32_t rs1, 
+                                const uint32_t middleConst, const uint32_t rd, State* state) {
 
     switch (middleConst) {
 
         case 0b000:
-            return addi (...);
+            return ImplAddI     (state, imm, rs1, rd);
         case 0b010:
-            return slti (...);
+            return ImplSltI     (state, imm, rs1, rd);
         case 0b011:
-            return sltiu (...);
+            return ImplSltIU    (state, imm, rs1, rd);
         case 0b100:
-            return xori (...);
+            return ImplXorI     (state, imm, rs1, rd);
         case 0b110:
-            return ori (...);
+            return ImplOrI      (state, imm, rs1, rd);
         case 0b111:
-            return andi (...);
+            return ImplAddI     (state, imm, rs1, rd);
         default:
+            printf ("Unexpected middle constant in function %s\n", __func__);
             return -1;
 
     }
 
 }
 
-static int SecondOpGroupHandle (const unsigned char* command, const int rs1,
-                                const int middleConst, const int rd) {
+static int SecondOpGroupHandle (const unsigned char* command, const uint32_t rs1,
+                                const uint32_t middleConst, const uint32_t rd, State* state) {
 
     if (middleConst == 0b101 || middleConst == 0b001) { //slli, srli, srai
 
-        int shamt       = CALC_RS2;
-        int frontConst  = CALC_FRONT_MAGIC_CONST;
+        uint32_t shamt       = GetBites (command, 20, 24);
+        uint32_t frontConst  = GetBites (command, 25, 31);
 
-        return HandleShifts (frontConst, shamt, rs1, middleConst, rd);
+        return HandleShifts (frontConst, shamt, rs1, middleConst, rd, state);
 
     }
 
-    int imm = CALC_IMM;
+    uint32_t imm = GetBites (command, 20, 31);
 
-    return HandleArithWithInt (imm, rs1, middleConst, rd);
+    return HandleArithWithInt (imm, rs1, middleConst, rd, state);
     
 }
 
-static int ThirdOpGroupHandle (const int imm, const int rs1, const int middleConst, const int rd) {
+static int ThirdOpGroupHandle   (const uint32_t imm, const uint32_t rs1, const uint32_t middleConst, 
+                                const uint32_t rd, State* state) {
 
     switch (middleConst) {
 
         case 0b000:
-            return lb (...);
+            return ImplLb (state, imm, rs1, rd);
         case 0b001:
-            return lh (...);
+            return ImplLh (state, imm, rs1, rd);
         case 0b010:
-            return lw (...);
+            return ImplLw (state, imm, rs1, rd);
 
     }
 
@@ -164,17 +159,17 @@ static int ThirdOpGroupHandle (const int imm, const int rs1, const int middleCon
 
 }
 
-static int FourthOpGroupHandle (const int frontImm, const int rs2, const int rs1,
-                                const int middleConst, const int lastImm) {
+static int FourthOpGroupHandle (const uint32_t frontImm, const uint32_t rs2, const uint32_t rs1,
+                                const uint32_t middleConst, const uint32_t lastImm, State* state) {
 
-    switch (middleConst) {
+    switch (middleConst) { //!TODO
 
         case 0b000:
-            return sb (...);
+            return ImplSb (state, lastImm, rs1, rs2);
         case 0b001:
-            return sh (...);
+            return ImplSh (state, lastImm, rs1, rs2);
         case 0b010:
-            return sw (...);
+            return ImplSw (state, lastImm, rs1, rs2);
 
     }
 
@@ -182,23 +177,29 @@ static int FourthOpGroupHandle (const int frontImm, const int rs2, const int rs1
 
 }
 
-static int BranchOpsHandle (const int frontImm, const int rs2, const int rs1,
-                            const int middleConst, const int lastImm) {
+static int BranchOpsHandle (const uint32_t frontImm, const uint32_t rs2, const uint32_t rs1,
+                            const uint32_t middleConst, const uint32_t lastImm) {
 
-    switch (middleConst) {
+    switch (middleConst) { //!TODO
 
         case 0b000:
-            return beq (...);
+            printf ("beq\n");//return beq (...);
+            return 0;
         case 0b001:
-            return bne (...);
+            printf ("bne\n");//return bne (...);
+            return 0;
         case 0b100:
-            return blt (...);
+            printf ("blt\n");//return blt (...);
+            return 0;
         case 0b101:
-            return bge (...);
+            printf ("bge\n");//return bge (...);
+            return 0;
         case 0b110:
-            return bltu (...);
+            printf ("bltu\n");//return bltu (...);
+            return 0;
         case 0b111:
-            return bgeu (...);
+            printf ("bgeu\n");//return bgeu (...);
+            return 0;
 
     }
 
@@ -206,97 +207,96 @@ static int BranchOpsHandle (const int frontImm, const int rs2, const int rs1,
 
 }
 
-static int HandleCommand (const unsigned char* command) {
+static int HandleCommand (const unsigned char* command, State *state) {
 
-    int opcode = (*(command + COMMAND_SIZE - 1)) & 0b01111111;
+    uint32_t opcode = GetBites (command, 0, 6);
+    printf ("opcode = %d\n", opcode);
 
     switch (opcode) {
 
         case firstOpGroup: { //add, sub, xor, or, and
             
-            int rd              = CALC_RD;
+            uint32_t rd              = GetBites (command, 7, 11);
 
-            int magicConst      = CALC_MAGIC_CONST;
-            int rs1             = CALC_RS1;
-            int rs2             = CALC_RS2;
+            uint32_t magicConst      = GetBites (command, 12, 14);
+            uint32_t rs1             = GetBites (command, 15, 19);
+            uint32_t rs2             = GetBites (command, 20, 24);
             
-            int frontMagicConst = CALC_FRONT_MAGIC_CONST;
+            uint32_t frontMagicConst = GetBites (command, 25, 31);
 
-            return FirstOpGroupHandle (frontMagicConst, rs2, rs1, magicConst, rd);
+            return FirstOpGroupHandle (frontMagicConst, rs2, rs1, magicConst, rd, state);
 
         }
         case secondOpGroup: {   //addi, slti, sltiu, xori, ori, andi, slli, srli, srai
 
-            int rd          = CALC_RD;
-            int magicConst  = CALC_MAGIC_CONST;
-            int rs1         = CALC_RS1;
+            uint32_t rd          = GetBites (command, 7, 11);
+            uint32_t magicConst  = GetBites (command, 12, 14);
+            uint32_t rs1         = GetBites (command, 15, 19);
 
-            return SecondOpGroupHandle (command, rs1, magicConst, rd);
+            return SecondOpGroupHandle (command, rs1, magicConst, rd, state);
 
         }
         case thirdOpGroup: {    //lb, lh, lw
 
-            int rd          = CALC_RD;
-            int magicConst  = CALC_MAGIC_CONST;
-            int rs1         = CALC_RS1;
+            uint32_t rd          = GetBites (command, 7, 11);
+            uint32_t magicConst  = GetBites (command, 12, 14);
+            uint32_t rs1         = GetBites (command, 15, 19);
 
-            int imm         = CALC_IMM;
+            uint32_t imm         = GetBites (command, 20, 31);
 
-            return ThirdOpGroupHandle (imm, rs1, magicConst, rd);
+            return ThirdOpGroupHandle (imm, rs1, magicConst, rd, state);
 
         }
         case fourthOpGroup: {   //sb, sh, sw
 
-            int lastImm     = CALC_RD;
+            uint32_t lastImm     = GetBites (command, 7, 11);
             
-            int magicConst  = CALC_MAGIC_CONST;
+            uint32_t magicConst  = GetBites (command, 12, 14);
 
-            int rs1         = CALC_RS1;
-            int rs2         = CALC_RS2;
+            uint32_t rs1         = GetBites (command, 15, 19);
+            uint32_t rs2         = GetBites (command, 20, 24);
 
-            int frontImm    = CALC_FRONT_MAGIC_CONST;
+            uint32_t frontImm    = GetBites (command, 25, 31);
 
-            return FourthOpGroupHandle (frontImm, rs2, rs1, magicConst, lastImm);
+            return FourthOpGroupHandle (frontImm, rs2, rs1, magicConst, lastImm, state);
 
         }
         case fifthOpGroup: { //lui
 
-            int rd = CALC_RD;
+            uint32_t rd  = GetBites (command, 7, 11);
+            uint32_t imm = GetBites (command, 12, 31);
 
-            int imm = CALC_BIG_IMM;
-
-            return lui (...);
+            return ImplLui (state, imm, rd);
 
         }
         case sixthOpGroup: { //jal
 
-            int rd = CALC_RD;
-            
-            int imm = CALC_BIG_IMM;
+            uint32_t rd  = GetBites (command, 7, 11);
+            uint32_t imm = GetBites (command, 12, 31);
 
-            return jal (...);
+            return ImplJal (state, imm, rd);
 
         }
         case seventhOpGroup: { //jalr
 
-            int rd          = CALC_RD;
-            int magicConst  = CALC_MAGIC_CONST;
-            int rs1         = CALC_RS1;
+            uint32_t rd          = GetBites (command, 7, 11);
+            uint32_t magicConst  = GetBites (command, 12, 14);
+            uint32_t rs1         = GetBites (command, 15, 19);
 
-            int imm         = CALC_IMM;
+            uint32_t imm         = GetBites (command, 20, 31);
 
-            return jalr (...);
+            return ImplJalR (state, imm, rs1, rd);
 
         }
         case eightthOpGroup: { //beq, bne, blt, bge, bltu, bgeu
 
-            int lastImm     = CALC_RD;
-            int middleConst = CALC_MAGIC_CONST;
+            uint32_t lastImm     = GetBites (command, 7, 11);
+            uint32_t middleConst = GetBites (command, 12, 14);
             
-            int rs1         = CALC_RS1;
-            int rs2         = CALC_RS2;
+            uint32_t rs1         = GetBites (command, 15, 19);
+            uint32_t rs2         = GetBites (command, 20, 24);
 
-            int frontImm    = CALC_FRONT_MAGIC_CONST;
+            uint32_t frontImm    = GetBites (command, 25, 31);
 
             return BranchOpsHandle (frontImm, rs2, rs1, middleConst, lastImm);
             
