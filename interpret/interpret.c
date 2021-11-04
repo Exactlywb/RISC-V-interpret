@@ -141,6 +141,41 @@ static int SecondOpGroupHandle (const unsigned char* command, const int rs1,
     
 }
 
+static int ThirdOpGroupHandle (const int imm, const int rs1, const int middleConst, const int rd) {
+
+    switch (middleConst) {
+
+        case 0b000:
+            return lb (...);
+        case 0b001:
+            return lh (...);
+        case 0b010:
+            return lw (...);
+
+    }
+
+    return -1;
+
+}
+
+static int FourthOpGroupHandle (const int frontImm, const int rs2, const int rs1,
+                                const int middleConst, const int lastImm) {
+
+    switch (middleConst) {
+
+        case 0b000:
+            return sb (...);
+        case 0b001:
+            return sh (...);
+        case 0b010:
+            return sw (...);
+
+    }
+
+    return -1;
+
+}
+
 static int HandleCommand (const unsigned char* command) {
 
     int opcode = (*(command + COMMAND_SIZE - 1)) & 0b01111111;
@@ -162,11 +197,36 @@ static int HandleCommand (const unsigned char* command) {
         }
         case secondOpGroup: {   //addi, slti, sltiu, xori, ori, andi, slli, srli, srai
 
-            int rd              = CALC_RD;
-            int magicConst      = CALC_MAGIC_CONST;
-            int rs1             = CALC_RS1;
+            int rd          = CALC_RD;
+            int magicConst  = CALC_MAGIC_CONST;
+            int rs1         = CALC_RS1;
 
             return SecondOpGroupHandle (command, rs1, magicConst, rd);
+
+        }
+        case thirdOpGroup: {    //lb, lh, lw
+
+            int rd          = CALC_RD;
+            int magicConst  = CALC_MAGIC_CONST;
+            int rs1         = CALC_RS1;
+
+            int imm         = CALC_IMM;
+
+            return ThirdOpGroupHandle (imm, rs1, magicConst, rd);
+
+        }
+        case fourthOpGroup: {   //sb, sh, sw
+
+            int lastImm     = CALC_RD;
+            
+            int magicConst  = CALC_MAGIC_CONST;
+
+            int rs1         = CALC_RS1;
+            int rs2         = CALC_RS2;
+
+            int frontImm    = CALC_FRONT_MAGIC_CONST;
+
+            return FourthOpGroupHandle (frontImm, rs2, rs1, magicConst, lastImm);
 
         }
         default:
