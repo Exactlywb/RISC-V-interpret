@@ -111,14 +111,6 @@ static int HandleArithWithInt   (const uint32_t imm, const uint32_t rs1,
 
     for (int i = 12; i < 32; i++)
         extendedImm ^= (highestBit << i);
-
-    printf ("extendedImm = %d\n", extendedImm);
-
-    // int32_t highestBit = (imm >> 11) & 1;
-    // int32_t extendedImm = imm ^ (highestBit << 11);
-    // extendedImm |= (highestBit << 31);
-
-    printf ("extended %d\n", extendedImm);
     
     switch (middleConst) {
 
@@ -341,4 +333,3 @@ off_t GetFileSize (const int fd) {
 
     return res;
 
-}
