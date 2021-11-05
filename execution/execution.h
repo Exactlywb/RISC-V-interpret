@@ -10,70 +10,77 @@ typedef uint32_t    RegValue;
 typedef int32_t     ImmValue;
 typedef uint8_t     RegNumber;
 
-typedef uint32_t ProgCounter;
+typedef uint32_t    ProgCounter;
 
-typedef struct State {
+#define REG_NUM 32
 
-    PhysMemory  Memory;
-    RegValue    Registors[32];
+typedef struct CPU {
+
+    PhysMemory  memory [PHYS_MEM_SIZE];
+    RegValue    registers [REG_NUM];
     ProgCounter pc;
     
-} State; 
+} CPU;
 
-//-------------------------------------------------------------------------
-//--------------------------------ARITHMETIC-------------------------------
-//-------------------------------------------------------------------------
-char ImplAdd  (State* state, RegNumber numRs1, RegNumber numRs2, RegNumber numRd);
-char ImplAddI (State* state, ImmValue  imm,    RegNumber numRs1, RegNumber numRd);
-char ImplSub  (State* state, RegNumber numRs1, RegNumber numRs2, RegNumber numRd);
+//=========================================================================
+//================================ARITHMETIC===============================
+//=========================================================================
+char ImplAdd  (CPU* CPU, const RegNumber numRs1,    const RegNumber numRs2, const RegNumber numRd);
+char ImplAddI (CPU* CPU, const ImmValue  imm,       const RegNumber numRs1, const RegNumber numRd);
+char ImplSub  (CPU* CPU, const RegNumber numRs1,    const RegNumber numRs2, const RegNumber numRd);
 
-//-------------------------------------------------------------------------
-//------------------------------LOGICAL OPERS------------------------------
-//-------------------------------------------------------------------------
-char ImplAnd   (State* state, RegNumber numRs1, RegNumber numRs2, RegNumber numRd);
-char ImplAndI  (State* state, ImmValue  imm,    RegNumber numRs1, RegNumber numRd);
-char ImplOr    (State* state, RegNumber numRs1, RegNumber numRs2, RegNumber numRd);
-char ImplOrI   (State* state, ImmValue  imm,    RegNumber numRs1, RegNumber numRd);
-char ImplXor   (State* state, RegNumber numRs1, RegNumber numRs2, RegNumber numRd);
-char ImplXorI  (State* state, ImmValue  imm,    RegNumber numRs1, RegNumber numRd);
+//=========================================================================
+//==============================LOGICAL OPERS==============================
+//=========================================================================
+char ImplAnd   (CPU* CPU, const RegNumber numRs1,   const RegNumber numRs2, const RegNumber numRd);
+char ImplAndI  (CPU* CPU, const ImmValue  imm,      const RegNumber numRs1, const RegNumber numRd);
+char ImplOr    (CPU* CPU, const RegNumber numRs1,   const RegNumber numRs2, const RegNumber numRd);
+char ImplOrI   (CPU* CPU, const ImmValue  imm,      const RegNumber numRs1, const RegNumber numRd);
+char ImplXor   (CPU* CPU, const RegNumber numRs1,   const RegNumber numRs2, const RegNumber numRd);
+char ImplXorI  (CPU* CPU, const ImmValue  imm,      const RegNumber numRs1, const RegNumber numRd);
 
-//-------------------------------------------------------------------------
-//----------------------------COMPARISON OPERS-----------------------------
-//-------------------------------------------------------------------------
-char ImplSltI  (State* state, ImmValue  imm,    RegNumber numRs1, RegNumber numRd);
-char ImplSltIU (State* state, ImmValue  imm,    RegNumber numRs1, RegNumber numRd); 
+//=========================================================================
+//============================COMPARISON OPERS=============================
+//=========================================================================
+char ImplSltI  (CPU* CPU, const ImmValue  imm,      const RegNumber numRs1, const RegNumber numRd);
+char ImplSltIU (CPU* CPU, const ImmValue  imm,      const RegNumber numRs1, const RegNumber numRd); 
 
-//-------------------------------------------------------------------------
-//---------------------------------SHIFTS----------------------------------
-//-------------------------------------------------------------------------
-char ImplSllI  (State* state, ImmValue  imm,    RegNumber numRs1, RegNumber numRd);
-char ImplSrlI  (State* state, ImmValue  imm,    RegNumber numRs1, RegNumber numRd);
-char ImplSraI  (State* state, ImmValue  imm,    RegNumber numRs1, RegNumber numRd);
+//=========================================================================
+//=================================SHIFTS==================================
+//=========================================================================
+char ImplSllI  (CPU* CPU, const ImmValue  imm,      const RegNumber numRs1, const RegNumber numRd);
+char ImplSrlI  (CPU* CPU, const ImmValue  imm,      const RegNumber numRs1, const RegNumber numRd);
+char ImplSraI  (CPU* CPU, const ImmValue  imm,      const RegNumber numRs1, const RegNumber numRd);
 
-//-------------------------------------------------------------------------
-//-----------------------------MEMORY OPERS--------------------------------
-//-------------------------------------------------------------------------
-char ImplLb    (State* state, ImmValue  imm,    RegNumber numRs1, RegNumber numRd);
-char ImplLh    (State* state, ImmValue  imm,    RegNumber numRs1, RegNumber numRd);
-char ImplLw    (State* state, ImmValue  imm,    RegNumber numRs1, RegNumber numRd);
-char ImplSb    (State* state, ImmValue  imm,    RegNumber numRs1, RegNumber numRs2);
-char ImplSh    (State* state, ImmValue  imm,    RegNumber numRs1, RegNumber numRs2);
-char ImplSw    (State* state, ImmValue  imm,    RegNumber numRs1, RegNumber numRs2);
+//=========================================================================
+//=============================MEMORY OPERS================================
+//=========================================================================
+char ImplLb    (CPU* CPU, const ImmValue  imm,      const RegNumber numRs1, const RegNumber numRd);
+char ImplLh    (CPU* CPU, const ImmValue  imm,      const RegNumber numRs1, const RegNumber numRd);
+char ImplLw    (CPU* CPU, const ImmValue  imm,      const RegNumber numRs1, const RegNumber numRd);
+char ImplSb    (CPU* CPU, const ImmValue  imm,      const RegNumber numRs1, const RegNumber numRs2);
+char ImplSh    (CPU* CPU, const ImmValue  imm,      const RegNumber numRs1, const RegNumber numRs2);
+char ImplSw    (CPU* CPU, const ImmValue  imm,      const RegNumber numRs1, const RegNumber numRs2);
 
-//-------------------------------------------------------------------------
-//---------------------------------LUI-------------------------------------
-//-------------------------------------------------------------------------
-char ImplLui    (State* state, ImmValue  imm,   RegNumber numRd);
+//=========================================================================
+//================================LUI?===================================== (Vuitton)
+//=========================================================================
+char ImplLui   (CPU* CPU, const ImmValue  imm,      const RegNumber numRd);
 
-//-------------------------------------------------------------------------
-//--------------------------UNCONDITIONAL JUMPS----------------------------
-//-------------------------------------------------------------------------
-char ImplJal    (State* state, ImmValue  imm,   RegNumber numRd);
-char ImplJalR   (State* state, ImmValue  imm,   RegNumber numRs1, RegNumber numRd);
+//=========================================================================
+//==========================UNCONDITIONAL JUMPS============================
+//=========================================================================
+char ImplJal   (CPU* CPU, const ImmValue  imm,      const RegNumber numRd);
+char ImplJalR  (CPU* CPU, const ImmValue  imm,      const RegNumber numRs1, const RegNumber numRd);
 
-
-#define ZERO_POINTER                    \
-                        if (!state)     \
-                            return 1;
+//=========================================================================
+//===========================CONDITIONAL JUMPS=============================
+//=========================================================================
+char ImplBeq   (CPU* CPU, const ImmValue  imm,      const RegNumber numRs1, const RegNumber numRs2);
+char ImplBne   (CPU* CPU, const ImmValue  imm,      const RegNumber numRs1, const RegNumber numRs2);
+char ImplBlt   (CPU* CPU, const ImmValue  imm,      const RegNumber numRs1, const RegNumber numRs2);
+char ImplBge   (CPU* CPU, const ImmValue  imm,      const RegNumber numRs1, const RegNumber numRs2);
+char ImplBltU  (CPU* CPU, const ImmValue  imm,      const RegNumber numRs1, const RegNumber numRs2);
+char ImplBgeU  (CPU* CPU, const ImmValue  imm,      const RegNumber numRs1, const RegNumber numRs2);
 
 #endif

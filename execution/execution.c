@@ -2,312 +2,477 @@
 
 //===============LOGGING===============
 
-#define SHOW_REG_BEFORE(command)                                                                                                        \
-                                                    do {                                                                                \
-                                                                                                                                        \
-                                                        printf ("* \t %s:\n", command);                                                 \
-                                                        printf ("** \t before: reg [%d] = %u\n", numRd, state->Registors [numRd]);      \
-                                                                                                                                        \
-                                                    } while (0)
+#define SHOW_REG_BEFORE(command)                                                                                        \
+                                    do {                                                                                \
+                                                                                                                        \
+                                        printf ("\n\n");                                                                \
+                                        printf ("* \t %s:\n", command);                                                 \
+                                        printf ("** \t before: reg [%d] = %u\n", numRd, CPU->registers [numRd]);        \
+                                                                                                                        \
+                                    } while (0)
 
-#define SHOW_REG_AFTER_TWO_REGS(sign)                                                                                                           \
-                                                    do {                                                                                        \
-                                                                                                                                                \
-                                                        printf ("** \t after: reg [%d] = %u %s %u = %u\n",  numRd, state->Registors [numRs1],   \
-                                                                                                            sign, state->Registors [numRs2],    \
-                                                                                                            state->Registors[numRd]);           \
-                                                                                                                                                \
-                                                    } while (0)
-
-
-#define SHOW_REG_AFTER_IMM_REG(sign)                do {                                                                                        \
-                                                                                                                                                \
-                                                        printf ("** \t after: reg [%d] = %u %s %u = %u\n",  numRd, state->Registors [numRs1],   \
-                                                                                                            sign, imm, state->Registors[numRd]);\
-                                                                                                                                                \
-                                                    } while (0)
+#define SHOW_REG_AFTER_TWO_REGS(sign)                                                                                       \
+                                    do {                                                                                    \
+                                                                                                                            \
+                                        printf ("--------------------------------------\n");                                \
+                                        printf ("** \t after: reg [%d] = %u %s %u = %u\n",  numRd, CPU->registers [numRs1], \
+                                                                                            sign, CPU->registers [numRs2],  \
+                                                                                            RD);                            \
+                                        printf ("--------------------------------------\n");                                \
+                                                                                                                            \
+                                    } while (0)
 
 
-//-------------------------------------------------------------------------
-//--------------------------------ARITHMETIC-------------------------------
-//-------------------------------------------------------------------------
-char ImplAdd  (State* state, RegNumber numRs1, RegNumber numRs2, RegNumber numRd) {
+#define SHOW_REG_AFTER_IMM_REG(sign)                                                                                            \
+                                    do {                                                                                        \
+                                                                                                                                \
+                                        printf ("--------------------------------------\n");                                    \
+                                        printf ("** \t after: reg [%d] = %u %s %u = %u\n",  numRd, CPU->registers [numRs1],     \
+                                                                                            sign, imm, RD);                     \
+                                        printf ("--------------------------------------\n");                                    \
+                                                                                                                                \
+                                    } while (0)
 
-    ZERO_POINTER
+#define CHECK_CPU   SECURITY_FUNCTION (IS_NULL (CPU), {}, -1)
+#define MOVE_PC     PC += 4
+
+#define IMPL(toDo)      do {                        \
+                                                    \
+                            CHECK_CPU;              \
+                            toDo                    \
+                            MOVE_PC;                \
+                            return 0;               \
+                                                    \
+                        } while (0)
+
+#define RS1 (CPU->registers [numRs1])
+#define RS2 (CPU->registers [numRs2])
+
+#define RD  (CPU->registers[numRd])
+
+#define PC  (CPU->pc)
+
+#define MEMORY CPU->memory
+
+//=========================================================================
+//================================ARITHMETIC===============================
+//=========================================================================
+char ImplAdd  (CPU* CPU, const RegNumber numRs1, const RegNumber numRs2, const RegNumber numRd) {
+
+    IMPL 
+    (
+        {
+            SHOW_REG_BEFORE ("add");
+            RD = RS1 + RS2;
+            SHOW_REG_AFTER_TWO_REGS ("+");
+        }
+    );
+
+}
+
+char ImplAddI (CPU* CPU, const ImmValue imm, const RegNumber numRs1, const RegNumber numRd) {
+
+    IMPL 
+    (
+        {
+            SHOW_REG_BEFORE ("addI");
+            RD = (RegValue)((ImmValue)RS1 + imm);
+            SHOW_REG_AFTER_IMM_REG ("+");
+        }
+    );
+
+}
+
+char ImplSub  (CPU* CPU, const RegNumber numRs1, const RegNumber numRs2, const RegNumber numRd) {
+
+    IMPL 
+    (
+        {
+            SHOW_REG_BEFORE ("sub");
+            RD = RS1 - RS2;
+            SHOW_REG_AFTER_TWO_REGS ("-");
+        }
+    );
+
+}
+
+//=========================================================================
+//==============================LOGICAL OPERS==============================
+//=========================================================================
+char ImplAnd  (CPU* CPU, const RegNumber numRs1, const RegNumber numRs2, const RegNumber numRd) {
+
+    IMPL 
+    (
+        {
+            SHOW_REG_BEFORE ("sub");
+            RD = RS1 & RS2;
+            SHOW_REG_AFTER_TWO_REGS ("-");
+        }
+    );
+
+}
+
+char ImplAndI  (CPU* CPU, const ImmValue  imm, const RegNumber numRs1, const RegNumber numRd) {
     
-    SHOW_REG_BEFORE ("add");
-
-    state->Registors[numRd] = state->Registors[numRs1] + state->Registors[numRs2];
-
-    SHOW_REG_AFTER_TWO_REGS ("+");
-
-    return 0;
-
-} 
-
-char ImplAddI (State* state, ImmValue imm,  RegNumber numRs1, RegNumber numRd) {
-
-    ZERO_POINTER
-
-    SHOW_REG_BEFORE ("addI");
-
-    state->Registors[numRd] = state->Registors[numRs1] + imm;
-
-    SHOW_REG_AFTER_IMM_REG ("+");
-
-    return 0;
+    IMPL 
+    (
+        {
+            SHOW_REG_BEFORE ("andI");
+            RD = (RegValue)((ImmValue)RS1 & imm);
+            SHOW_REG_AFTER_IMM_REG ("&");
+        }
+    );
 
 }
 
-char ImplSub  (State* state, RegNumber numRs1, RegNumber numRs2, RegNumber numRd) {
+char ImplOr    (CPU* CPU, const RegNumber numRs1, const RegNumber numRs2, const RegNumber numRd) {
 
-    ZERO_POINTER
+    IMPL 
+    (
+        {
+            SHOW_REG_BEFORE ("or");
+            RD = RS1 | RS2;
+            SHOW_REG_AFTER_TWO_REGS ("|");
+        }
+    );
+
+}
+
+char ImplOrI   (CPU* CPU, const ImmValue imm, const RegNumber numRs1, const RegNumber numRd) {
     
-    SHOW_REG_BEFORE ("sub");
+    IMPL 
+    (
+        {
+            SHOW_REG_BEFORE ("orI");
+            RD = (RegValue)((ImmValue)RS1 | imm);
+            SHOW_REG_AFTER_IMM_REG ("|");
+        }
+    );
 
-    state->Registors[numRd] = state->Registors[numRs1] - state->Registors[numRs2];
+}
 
-    SHOW_REG_AFTER_TWO_REGS ("-");
+char ImplXor   (CPU* CPU, const RegNumber numRs1, const RegNumber numRs2, const RegNumber numRd) {
+
+    IMPL 
+    (
+        {
+            SHOW_REG_BEFORE ("xor");
+            RD = RS1 ^ RS2;
+            SHOW_REG_AFTER_TWO_REGS ("^");
+        }
+    );
 
     return 0;
 
 }
 
-//-------------------------------------------------------------------------
-//------------------------------LOGICAL OPERS------------------------------
-//-------------------------------------------------------------------------
-char ImplAnd  (State* state, RegNumber numRs1, RegNumber numRs2, RegNumber numRd) {
-
-    ZERO_POINTER
+char ImplXorI   (CPU* CPU, const ImmValue  imm, const RegNumber numRs1, const RegNumber numRd) {
     
-    SHOW_REG_BEFORE ("and");
-
-    state->Registors[numRd] = state->Registors[numRs1] & state->Registors[numRs2];
-
-    SHOW_REG_AFTER_TWO_REGS ("&");
-
-    return 0;
+    IMPL 
+    (
+        {
+            SHOW_REG_BEFORE ("xorI");
+            RD = (RegValue)((ImmValue)RS1 ^ imm);
+            SHOW_REG_AFTER_IMM_REG ("^");
+        }
+    );
 
 }
 
-char ImplAndI  (State* state, ImmValue  imm,    RegNumber numRs1, RegNumber numRd) {
+//=========================================================================
+//============================COMPARISON OPERS=============================
+//=========================================================================
+char ImplSltI (CPU* CPU, const ImmValue  imm, const RegNumber numRs1, const RegNumber numRd) {
+
+    IMPL 
+    (
+        {
+            SHOW_REG_BEFORE ("sltI");
+            if ((SignedRegValue) (RS1) < (SignedRegValue)imm)
+                RD = 1;
+            else    
+                RD = 0;
+            SHOW_REG_AFTER_IMM_REG ("<(signed)");
+        }
+    );
+
+}
+
+char ImplSltIU (CPU* CPU, const ImmValue  imm, const RegNumber numRs1, const RegNumber numRd) {
+
+    IMPL 
+    (
+        {
+            SHOW_REG_BEFORE ("sltIU");
+            if (RS1 < (RegValue)imm)
+                RD = 1;
+            else    
+                RD = 0;
+            SHOW_REG_AFTER_IMM_REG ("<(unsigned)");
+        }
+    );
+
+}
+
+//=========================================================================
+//=================================SHIFTS==================================
+//=========================================================================
+char ImplSllI (CPU* CPU, const ImmValue  imm, const RegNumber numRs1, const RegNumber numRd) {
+
+    IMPL 
+    (
+        {
+            SHOW_REG_BEFORE ("sllI");
+            RD = RS1 << imm;  
+
+        }
+    );
+
+}
+
+char ImplSrlI (CPU* CPU, const ImmValue  imm, const RegNumber numRs1, const RegNumber numRd) {
+
+    IMPL 
+    (
+        {
+            SHOW_REG_BEFORE ("srlI");
+            RD = RS1 >> imm;
+
+        }
+    );
+
+}
+
+char ImplSraI (CPU* CPU, const ImmValue  imm, const RegNumber numRs1, const RegNumber numRd) {
+
+    IMPL 
+    (
+        {
+            SHOW_REG_BEFORE ("sraI");
+            RD = (RegValue)((SignedRegValue) RS1 >> imm);
+            SHOW_REG_AFTER_IMM_REG (">>");
+        }
+    );
     
-    ZERO_POINTER
+}
 
-    SHOW_REG_BEFORE ("andI");
+//=========================================================================
+//=============================MEMORY OPERS================================
+//=========================================================================
+char ImplLb    (CPU* CPU, const ImmValue imm, const RegNumber numRs1, const RegNumber numRd) {
     
-    state->Registors[numRd] = state->Registors[numRs1] & imm;
+    IMPL 
+    (
+        {
+            SHOW_REG_BEFORE ("lb");
+            RD = (RegValue)((OneByte)(MEMORY [(ImmValue)RS1 + imm]));
 
-    SHOW_REG_AFTER_IMM_REG ("&");
-
-    return 0;
+        }
+    );
 
 }
 
-char ImplOr    (State* state, RegNumber numRs1, RegNumber numRs2, RegNumber numRd) {
+char ImplLh    (CPU* CPU, const ImmValue imm, const RegNumber numRs1, const RegNumber numRd) {
 
-    ZERO_POINTER
+    IMPL
+    (
+        {
+            SHOW_REG_BEFORE ("lh");
+            RD = (RegValue) ((TwoBytes)(MEMORY [(ImmValue)RS1 + imm]));
+
+        }
+    );
+
+}
+
+char ImplLw    (CPU* CPU, const ImmValue imm, const RegNumber numRs1, const RegNumber numRd) {
+
+    IMPL
+    (
+        {
+            SHOW_REG_BEFORE ("lw");
+            RD = (RegValue) ((FourBytes)(MEMORY [(ImmValue)RS1 + imm]));
+
+        }
+    );
+
+}
+
+char ImplSb    (CPU* CPU, const ImmValue imm, const RegNumber numRs1, const RegNumber numRs2) { 
+
+    IMPL
+    (
+        {
+            MEMORY [(ImmValue)RS1 + imm] = (OneByte)RS2;
+
+        }
+    );
+
+}
+
+char ImplSh    (CPU* CPU, const ImmValue  imm, const RegNumber numRs1, const RegNumber numRs2) { 
+
+    IMPL
+    (
+        {
+            MEMORY [(ImmValue)RS1 + imm] = (TwoBytes)RS2;
+
+        }
+    );
+
+}
+
+char ImplSw   (CPU* CPU, const ImmValue imm, const RegNumber numRs1, const RegNumber numRs2) { 
+
+    IMPL
+    (
+        {
+            MEMORY [(ImmValue)RS1 + imm] = (FourBytes)RS2;
+
+        }
+    );
+
+}
+
+//=========================================================================
+//================================LUI?===================================== (Vuitton)
+//=========================================================================
+char ImplLui   (CPU* CPU, const ImmValue imm, const RegNumber numRd) {
+
+    IMPL
+    (
+        {
+            SHOW_REG_BEFORE ("lui");
+            RD = (RegValue)(imm << 12);
+        }
+    );
+
+}
+
+//=========================================================================
+//==========================UNCONDITIONAL JUMPS============================
+//=========================================================================
+char ImplJal   (CPU* CPU, const ImmValue imm, const RegNumber numRd) {
+
+    IMPL
+    (
+        {
+            RD = PC + 4;
+            PC = (RegValue)((ImmValue)PC + imm);
+        }
+    );
+
+}
+
+char ImplJalR  (CPU* CPU, const ImmValue imm, const RegNumber numRs1, const RegNumber numRd) {
+
+    IMPL
+    (
+        {
+            RD = PC + 4;
+            PC = (RegValue)((((ImmValue)RS1 + imm) >> 1) << 1);
+            PC = PC & ~(1u << 0);
+
+        }
+    );
+
+}
+
+//=========================================================================
+//===========================CONDITIONAL JUMPS=============================
+//=========================================================================
+char ImplBeq   (CPU* CPU, const ImmValue imm, const RegNumber numRs1, const RegNumber numRs2) {
+
+    IMPL
+    (
+        {
+
+            if (RS1 == RS2) {
+                PC = (RegValue)((ImmValue)PC + imm);
+                return 0;
+            }
+
+        }
+    );
+
+}
+
+char ImplBne   (CPU* CPU, const ImmValue imm, const RegNumber numRs1, const RegNumber numRs2) {
+
+    IMPL
+    (
+        {
+
+            if (RS1 != RS2) {
+                PC = (RegValue)((ImmValue)PC + imm);
+                return 0;
+            }
+
+        }
+    );
     
-    SHOW_REG_BEFORE ("or");
+}
 
-    state->Registors[numRd] = state->Registors[numRs1] | state->Registors[numRs2];
+char ImplBlt   (CPU* CPU, const ImmValue imm, const RegNumber numRs1, const RegNumber numRs2) {
 
-    SHOW_REG_AFTER_TWO_REGS ("|");
+    IMPL
+    (
+        {
 
-    return 0;
+            if ((SignedRegValue) RS1 < (SignedRegValue) RS2) {
+                PC = (RegValue)((ImmValue)PC + imm);
+                return 0;
+            }
+
+        }
+    );
 
 }
 
-char ImplOrI   (State* state, ImmValue  imm,    RegNumber numRs1, RegNumber numRd) {
+char ImplBge   (CPU* CPU, const ImmValue imm, const RegNumber numRs1, const RegNumber numRs2) {
+
+    IMPL
+    (
+        {
+
+            if ((SignedRegValue) RS1 >= (SignedRegValue) RS2) {
+                PC = (RegValue)((ImmValue)PC + imm);
+                return 0;
+            }
+
+        }
+    );
+
+}
+
+char ImplBltU   (CPU* CPU, const ImmValue imm, const RegNumber numRs1, const RegNumber numRs2) {
+
+    IMPL
+    (
+        {
+
+            if (RS1 < RS2) {
+                PC = (RegValue)((ImmValue)PC + imm);
+                return 0;
+            }
+
+        }
+    );
+
+}
+
+char ImplBgeU   (CPU* CPU, const ImmValue imm, const RegNumber numRs1, const RegNumber numRs2) { //kuda bezhish
     
-    ZERO_POINTER
-    
-    SHOW_REG_BEFORE ("orI");
+    IMPL
+    (
+        {
 
-    state->Registors[numRd] = state->Registors[numRs1] | imm;
+            if (RS1 >= RS2) {
+                PC = (RegValue)((ImmValue)PC + imm);
+                return 0;
+            }
 
-    SHOW_REG_AFTER_IMM_REG ("|");
-
-    return 0;
-
-}
-
-char ImplXor   (State* state, RegNumber numRs1, RegNumber numRs2, RegNumber numRd) {
-
-    ZERO_POINTER
-    
-    SHOW_REG_BEFORE ("xor");
-
-    state->Registors[numRd] = state->Registors[numRs1] ^ state->Registors[numRs2];
-
-    SHOW_REG_AFTER_TWO_REGS ("^");
-
-    return 0;
+        }
+    );
 
 }
-
-char ImplXorI   (State* state, ImmValue  imm,    RegNumber numRs1, RegNumber numRd) {
-    
-    ZERO_POINTER
-
-    SHOW_REG_BEFORE ("xorI");
-    
-    state->Registors[numRd] = state->Registors[numRs1] ^ imm;
-
-    SHOW_REG_AFTER_IMM_REG ("^");
-
-    return 0;
-
-}
-
-//-------------------------------------------------------------------------
-//----------------------------COMPARISON OPERS-----------------------------
-//-------------------------------------------------------------------------
-char ImplSltI (State* state, ImmValue  imm,    RegNumber numRs1, RegNumber numRd) {
-
-    ZERO_POINTER
-
-    if ((SignedRegValue) (state->Registors[numRs1]) < (SignedRegValue)imm)
-        state->Registors[numRd] = 1;
-    else    
-        state->Registors[numRd] = 0;    
-
-    return 0;
-
-}
-
-char ImplSltIU (State* state, ImmValue  imm,    RegNumber numRs1, RegNumber numRd) {
-
-    ZERO_POINTER
-
-    if ((state->Registors[numRs1]) < imm)
-        state->Registors[numRd] = 1;
-    else    
-        state->Registors[numRd] = 0;      
-
-    return 0;
-
-}
-
-//-------------------------------------------------------------------------
-//---------------------------------SHIFTS----------------------------------
-//-------------------------------------------------------------------------
-char ImplSllI (State* state, ImmValue  imm, RegNumber numRs1, RegNumber numRd) {
-
-    ZERO_POINTER
-
-    SHOW_REG_BEFORE ("sllI");
-    state->Registors[numRd] = state->Registors[numRs1] << imm;    
-    SHOW_REG_AFTER_IMM_REG ("<<");
-
-    return 0;
-
-}
-
-char ImplSrlI (State* state, ImmValue  imm, RegNumber numRs1, RegNumber numRd) {
-
-    ZERO_POINTER
-
-    SHOW_REG_BEFORE ("srlI");
-    state->Registors[numRd] = state->Registors[numRs1] >> imm;    
-    SHOW_REG_AFTER_IMM_REG (">>");  
-
-    return 0;
-
-}
-
-char ImplSraI (State* state, ImmValue  imm, RegNumber numRs1, RegNumber numRd) {
-
-    ZERO_POINTER
-
-    SHOW_REG_BEFORE ("sraI");
-    state->Registors[numRd] = (RegValue)((SignedRegValue) state->Registors[numRs1] >> imm);      
-    SHOW_REG_AFTER_IMM_REG (">>");
-
-    return 0;
-}
-
-//-------------------------------------------------------------------------
-//-----------------------------MEMORY OPERS--------------------------------
-//-------------------------------------------------------------------------
-char ImplLb    (State* state, ImmValue  imm, RegNumber numRs1, RegNumber numRd) {
-
-    ZERO_POINTER
-
-    state->Registors[numRd] = (RegValue) ((OneByte)(state->Memory.buffer[state->Registors[numRs1] + imm]));
-    return 0;
-}
-
-char ImplLh    (State* state, ImmValue  imm,    RegNumber numRs1, RegNumber numRd) {
-
-    ZERO_POINTER
-
-    state->Registors[numRd] = (RegValue) ((TwoBytes)(state->Memory.buffer[state->Registors[numRs1] + imm]));
-    return 0;
-}
-
-char ImplLw    (State* state, ImmValue  imm,    RegNumber numRs1, RegNumber numRd) {
-
-    ZERO_POINTER
-
-    state->Registors[numRd] = (RegValue) ((FourBytes)(state->Memory.buffer[state->Registors[numRs1] + imm]));
-    return 0;
-}
-
-char ImplSb    (State* state, ImmValue  imm,    RegNumber numRs1, RegNumber numRs2) { 
-
-    ZERO_POINTER
-
-    state->Memory.buffer[state->Registors[numRs1] + imm] = (OneByte) state->Registors[numRs2];
-    return 0;
-}
-
-char ImplSh    (State* state, ImmValue  imm,    RegNumber numRs1, RegNumber numRs2) { 
-
-    ZERO_POINTER
-
-    state->Memory.buffer[state->Registors[numRs1] + imm] = (TwoBytes) state->Registors[numRs2];
-    return 0;
-}
-
-char ImplSw   (State* state, ImmValue  imm,    RegNumber numRs1, RegNumber numRs2) { 
-
-    ZERO_POINTER
-
-    state->Memory.buffer[state->Registors[numRs1] + imm] = (FourBytes) state->Registors[numRs2];
-    return 0;
-}
-
-//-------------------------------------------------------------------------
-//---------------------------------LUI-------------------------------------
-//-------------------------------------------------------------------------
-char ImplLui   (State* state, ImmValue  imm,   RegNumber numRd) {
-
-    ZERO_POINTER
-
-    state->Registors[numRd] = imm << 12;
-    return 0;
-}
-
-//-------------------------------------------------------------------------
-//--------------------------UNCONDITIONAL JUMPS----------------------------
-//-------------------------------------------------------------------------
-char ImplJal   (State* state, ImmValue  imm,   RegNumber numRd) {
-
-    ZERO_POINTER
-
-    state->Registors[numRd] = state->pc + sizeof (RegValue);
-    state->pc += imm << 12;
-    return 0;
-}
-
-char ImplJalR  (State* state, ImmValue  imm,  RegNumber numRs1, RegNumber numRd) {
-
-    ZERO_POINTER
-
-    state->Registors[numRd] = state->pc + sizeof (RegValue);
-    state->pc = (state->Registors[numRs1] + imm) << 1;
-    return 0;
-}
-
-

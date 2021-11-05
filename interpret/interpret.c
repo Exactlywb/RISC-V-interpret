@@ -1,321 +1,152 @@
+#include "../common.h"
 #include "interpret.h"
 
-static      int     RunParser       (const unsigned char* buffer, const off_t bufferSize, State *mainState);
-static      int     HandleCommand   (const unsigned char* command, State *mainState);
+//Main functions
+static  char    HandleCommands  (const char* command, CPU* CPU);
+static  int     StartParsing    (const off_t bufferSize, CPU *CPU);
 
-int RunInterpret (const int input) {
+//Common
+static  int         ReadBuffer      (const int inputFile, const off_t fileSize, CPU* CPU);
+        off_t       GetFileSize     (const int fd);
+static  int         ReadBuffer      (const int inputFile, const off_t fileSize, CPU* CPU);
+static  ImmValue    GetBits         (const char* command, const ImmValue start, const ImmValue end);
+static  ImmValue    ExtendedImm     (const ImmValue imm, char startBit);
 
-    SECURITY_FUNCTION (input < 0, {printf ("Bad input file descriptor!\n");}, input);
+//Commands group handling
+static int HandleCommandsGroup1     (const  ImmValue    midConst,   const   RegNumber rs2,  const   RegNumber rs1,
+                                    const   ImmValue    frontConst, const   RegNumber rd,           CPU* CPU);
+static int ShiftRecognizer          (const  ImmValue    frontConst, const   ImmValue shamt, const   RegNumber rs1,
+                                    const   ImmValue    midConst,   const   RegNumber rd,           CPU* CPU);
+static int HandleArithm     (const  ImmValue    imm,        const   RegNumber rs1, 
+                                    const   ImmValue    midConst,   const   RegNumber rd,           CPU* CPU);
+static int HandleCommandsGroup2     (const  char*       command,    const   RegNumber rs1,
+                                    const   ImmValue    midConst,   const   RegNumber rd,           CPU* CPU);
+static int HandleCommandsGroup3     (const  ImmValue    imm,        const   RegNumber rs1,  const   ImmValue midConst, 
+                                    const   RegNumber   rd,                 CPU*    CPU);
+static int HandleCommandsGroup4     (const  ImmValue    imm,        const   RegNumber rs2,  const   RegNumber rs1,
+                                    const   ImmValue    midConst,           CPU*    CPU);
+static int BranchesHandle           (CPU    *CPU,                   const   ImmValue imm,   const   RegNumber rs2,
+                                    const RegNumber rs1,            const   ImmValue midConst);
 
-    off_t fileSize = GetFileSize (input);
-    SECURITY_FUNCTION (fileSize <= 0, {}, (int)fileSize);
+int RunInterpret (const int inputFile) {
 
-    unsigned char* buffer = (unsigned char*)calloc ((size_t)fileSize, sizeof (*buffer));
-    SECURITY_FUNCTION (IS_NULL (buffer), {printf ("Bad alloc for char* buffer in function %s\n"
-                                                    , __func__);}, -1);
+    SECURITY_FUNCTION (inputFile < 0, {perror ("Bad input file descriptor");}, errno);
 
-    int readErr = read (input, buffer, (size_t)fileSize);
-    SECURITY_FUNCTION (readErr < 0, {free (buffer);
-                                     perror ("Bad read from input file");}, errno);
+    off_t fileSize = GetFileSize (inputFile);
+    SECURITY_FUNCTION (fileSize > PHYS_MEM_SIZE, {printf ("Too big program!\n");}, -1);
 
-    State mainState = {};
+    CPU CPU = {};
+    int err = ReadBuffer (inputFile, fileSize, &CPU);
+    SECURITY_FUNCTION (err != 0, {}, err);
 
-    int parseErr = RunParser (buffer, fileSize, &mainState);
-    SECURITY_FUNCTION (parseErr != 0, {free (buffer);}, parseErr);
-
-    free (buffer);
-
+    err = StartParsing (fileSize, &CPU);
+    SECURITY_FUNCTION (err != 0, {}, err);
+    
     return 0;
-
 }
 
-#define COMMAND_SIZE 4
+static char HandleCommands (const char* command, CPU *CPU) {
 
-static int RunParser (const unsigned char* buffer, const off_t bufferSize, State *mainState) {
-
-    for (off_t curBufInd = 0; curBufInd < bufferSize; curBufInd += 4)
-        HandleCommand (buffer + curBufInd, mainState);
-
-    return 0;
-
-}
-
-static int32_t GetBites (const unsigned char* command, const int start, const int end) {
-    //!TODO maybe there's the opportunity to optimize this function
-
-    int32_t res = 0;
-
-    for (int i = start; i <= end; i++)
-        res |= ((command [3 - i / 8] >> (i % 8)) & 1) << (i - start);
-
-    return res;
-
-}
-
-static int FirstOpGroupHandle   (const uint32_t frontConst, const uint32_t rs2, const uint32_t rs1,
-                                const uint32_t middleConst, const uint32_t rd, State* state) { //add, sub, xor, or, and
-
-    switch (middleConst) {
-
-        case 0b000: { //add, sub
-
-            if (frontConst == 0)
-                return ImplAdd (state, rs1, rs2, rd);
-            else if (frontConst == 32)
-                return ImplSub (state, rs1, rs2, rd);
-            
-            return -1;
-
-        }
-        case 0b100: //xor
-            return ImplXor  (state, rs1, rs2, rd);
-        case 0b110: //or
-            return ImplOr   (state, rs1, rs2, rd);
-        case 0b111: //and
-            return ImplAnd  (state, rs1, rs2, rd);
-
-    }
-    
-    return -1;
-
-}
-
-static int HandleShifts (const uint32_t frontConst, const uint32_t shamt, const uint32_t rs1,
-                        const uint32_t middleConst, const uint32_t rd, State* state) {
-
-    if (middleConst == 0b001) //slli
-        return ImplSllI (state, shamt, rs1, rd);
-    else if (middleConst == 0b101) { //srli or srai
-
-        if (frontConst == 0)//srli 
-            return ImplSrlI (state, shamt, rs1, rd);
-        else if (frontConst == 32) //srai
-            return ImplSraI (state, shamt, rs1, rd);
-
-    }
-
-    return -1;
-
-}
-
-static int HandleArithWithInt   (const uint32_t imm, const uint32_t rs1, 
-                                const uint32_t middleConst, const uint32_t rd, State* state) {
-    
-    char highestBit = (imm & (1 << 11)) >> 11;
-    printf ("highestBit = %d\n", highestBit);
-    int extendedImm = imm;
-    for (int i = 0; i < 31; i++) {
-        printf ("%d ", (imm & (1 << (31 - i))) >> (31 - i));
-        extendedImm |= imm & (1 << (31 - i));
-    }
-
-    for (int i = 12; i < 32; i++)
-        extendedImm ^= (highestBit << i);
-    
-    switch (middleConst) {
-
-        case 0b000:
-            printf ("addi\n");
-            return ImplAddI     (state, imm, rs1, rd);
-        case 0b010:
-            return ImplSltI     (state, imm, rs1, rd);
-        case 0b011:
-            return ImplSltIU    (state, imm, rs1, rd);
-        case 0b100:
-            return ImplXorI     (state, imm, rs1, rd);
-        case 0b110:
-            return ImplOrI      (state, imm, rs1, rd);
-        case 0b111:
-            return ImplAddI     (state, imm, rs1, rd);
-        default:
-            printf ("Unexpected middle constant in function %s\n", __func__);
-            return -1;
-
-    }
-
-}
-
-static int SecondOpGroupHandle (const unsigned char* command, const uint32_t rs1,
-                                const uint32_t middleConst, const uint32_t rd, State* state) {
-
-    if (middleConst == 0b101 || middleConst == 0b001) { //slli, srli, srai
-
-        uint32_t shamt       = GetBites (command, 20, 24);
-        uint32_t frontConst  = GetBites (command, 25, 31);
-
-        return HandleShifts (frontConst, shamt, rs1, middleConst, rd, state);
-
-    }
-
-    ImmValue imm = GetBites (command, 20, 31);
-
-    return HandleArithWithInt (imm, rs1, middleConst, rd, state);
-    
-}
-
-static int ThirdOpGroupHandle   (const uint32_t imm, const uint32_t rs1, const uint32_t middleConst, 
-                                const uint32_t rd, State* state) {
-
-    switch (middleConst) {
-
-        case 0b000:
-            return ImplLb (state, imm, rs1, rd);
-        case 0b001:
-            return ImplLh (state, imm, rs1, rd);
-        case 0b010:
-            return ImplLw (state, imm, rs1, rd);
-
-    }
-
-    return -1;
-
-}
-
-static int FourthOpGroupHandle (const uint32_t frontImm, const uint32_t rs2, const uint32_t rs1,
-                                const uint32_t middleConst, const uint32_t lastImm, State* state) {
-
-    switch (middleConst) { //!TODO
-
-        case 0b000:
-            return ImplSb (state, lastImm, rs1, rs2);
-        case 0b001:
-            return ImplSh (state, lastImm, rs1, rs2);
-        case 0b010:
-            return ImplSw (state, lastImm, rs1, rs2);
-
-    }
-
-    return -1;
-
-}
-
-static int BranchOpsHandle (const uint32_t frontImm, const uint32_t rs2, const uint32_t rs1,
-                            const uint32_t middleConst, const uint32_t lastImm) {
-
-    switch (middleConst) { //!TODO
-
-        case 0b000:
-            printf ("beq\n");//return beq (...);
-            return 0;
-        case 0b001:
-            printf ("bne\n");//return bne (...);
-            return 0;
-        case 0b100:
-            printf ("blt\n");//return blt (...);
-            return 0;
-        case 0b101:
-            printf ("bge\n");//return bge (...);
-            return 0;
-        case 0b110:
-            printf ("bltu\n");//return bltu (...);
-            return 0;
-        case 0b111:
-            printf ("bgeu\n");//return bgeu (...);
-            return 0;
-
-    }
-
-    return -1;
-
-}
-
-static int HandleCommand (const unsigned char* command, State *state) {
-
-    uint32_t opcode = GetBites (command, 0, 6);
-    printf ("opcode = %d\n", opcode);
+    uint8_t opcode = GetBits (command, 0, 6);
 
     switch (opcode) {
 
         case firstOpGroup: { //add, sub, xor, or, and
             
-            uint32_t rd              = GetBites (command, 7, 11);
+            RegNumber rd        = GetBits (command, 7, 11);
+            ImmValue midConst   = GetBits (command, 12, 14);
 
-            uint32_t magicConst      = GetBites (command, 12, 14);
-            uint32_t rs1             = GetBites (command, 15, 19);
-            uint32_t rs2             = GetBites (command, 20, 24);
-            
-            uint32_t frontMagicConst = GetBites (command, 25, 31);
+            RegNumber rs1       = GetBits (command, 15, 19);
+            RegNumber rs2       = GetBits (command, 20, 24);
 
-            return FirstOpGroupHandle (frontMagicConst, rs2, rs1, magicConst, rd, state);
+            ImmValue frontConst = GetBits (command, 25, 31);
+
+            return HandleCommandsGroup1 (midConst, rs2, rs1, frontConst, rd, CPU);
 
         }
         case secondOpGroup: {   //addi, slti, sltiu, xori, ori, andi, slli, srli, srai
 
-            uint32_t rd          = GetBites (command, 7, 11);
-            uint32_t magicConst  = GetBites (command, 12, 14);
-            uint32_t rs1         = GetBites (command, 15, 19);
+            RegNumber rd        = GetBits (command, 7, 11);
+            ImmValue midConst   = GetBits (command, 12, 14);
+            RegNumber rs1       = GetBits (command, 15, 19);
 
-            return SecondOpGroupHandle (command, rs1, magicConst, rd, state);
+            return HandleCommandsGroup2 (command, rs1, midConst, rd, CPU);
 
         }
         case thirdOpGroup: {    //lb, lh, lw
 
-            uint32_t rd          = GetBites (command, 7, 11);
-            uint32_t magicConst  = GetBites (command, 12, 14);
-            uint32_t rs1         = GetBites (command, 15, 19);
+            RegNumber rd        = GetBits (command, 7, 11);
+            ImmValue midConst   = GetBits (command, 12, 14);
+            RegNumber rs1       = GetBits (command, 15, 19);
 
-            uint32_t imm         = GetBites (command, 20, 31);
+            ImmValue imm    = GetBits (command, 20, 31);
+            imm             = ExtendedImm (imm, 11);
 
-            return ThirdOpGroupHandle (imm, rs1, magicConst, rd, state);
+            return HandleCommandsGroup3 (imm, rs1, midConst, rd, CPU);
 
         }
         case fourthOpGroup: {   //sb, sh, sw
 
-            uint32_t lastImm     = GetBites (command, 7, 11);
-            
-            uint32_t magicConst  = GetBites (command, 12, 14);
+            ImmValue  midConst  = GetBits (command, 12, 14);
+            RegNumber rs1       = GetBits (command, 15, 19);
+            RegNumber rs2       = GetBits (command, 20, 24);
 
-            uint32_t rs1         = GetBites (command, 15, 19);
-            uint32_t rs2         = GetBites (command, 20, 24);
+            ImmValue imm    =  GetBits (command, 7, 11) | GetBits (command, 25, 31)  << 5; 
+            imm             = ExtendedImm (imm, 11);
 
-            uint32_t frontImm    = GetBites (command, 25, 31);
-
-            return FourthOpGroupHandle (frontImm, rs2, rs1, magicConst, lastImm, state);
+            return HandleCommandsGroup4 (imm, rs2, rs1, midConst, CPU);
 
         }
         case fifthOpGroup: { //lui
 
-            uint32_t rd  = GetBites (command, 7, 11);
-            uint32_t imm = GetBites (command, 12, 31);
+            RegNumber rd    = GetBits (command, 7, 11);
 
-            return ImplLui (state, imm, rd);
+            ImmValue imm    = GetBits (command, 12, 31);
+            imm = ExtendedImm (imm, 19);
+
+            return ImplLui (CPU, imm, rd);
 
         }
         case sixthOpGroup: { //jal
 
-            uint32_t rd  = GetBites (command, 7, 11);
-            uint32_t imm = GetBites (command, 12, 31);
+            RegNumber rd     = GetBits (command, 7, 11);
+            ImmValue imm     = 0;
+            imm             |=  (GetBits (command, 21, 30)  << 1 ) + (GetBits (command, 20, 20)  << 11) + 
+                                (GetBits (command, 12, 19)  << 12) + (GetBits (command, 31, 31)  << 20);
 
-            return ImplJal (state, imm, rd);
+            imm = ExtendedImm (imm, 19);
+
+            return ImplJal (CPU, imm, rd);
 
         }
         case seventhOpGroup: { //jalr
 
-            uint32_t rd          = GetBites (command, 7, 11);
-            // uint32_t magicConst  = GetBites (command, 12, 14);
-            uint32_t rs1         = GetBites (command, 15, 19);
+            RegNumber   rd  = GetBits (command, 7, 11);
+            RegNumber   rs1 = GetBits (command, 15, 19);
 
-            uint32_t imm         = GetBites (command, 20, 31);
+            ImmValue    imm = GetBits (command, 20, 31);
+            imm             = ExtendedImm (imm, 11);
 
-            return ImplJalR (state, imm, rs1, rd);
+            return ImplJalR (CPU, imm, rs1, rd);
 
         }
         case eightthOpGroup: { //beq, bne, blt, bge, bltu, bgeu
-
-            uint32_t lastImm     = GetBites (command, 7, 11);
-            uint32_t middleConst = GetBites (command, 12, 14);
             
-            uint32_t rs1         = GetBites (command, 15, 19);
-            uint32_t rs2         = GetBites (command, 20, 24);
-
-            uint32_t frontImm    = GetBites (command, 25, 31);
-
-            return BranchOpsHandle (frontImm, rs2, rs1, middleConst, lastImm);
+            ImmValue imm            = 0;
+            ImmValue midConst       = GetBits (command, 12, 14);
+            RegNumber rs1           = GetBits (command, 15, 19);
+            RegNumber rs2           = GetBits (command, 20, 24);
             
+            imm                    |= (GetBits (command, 8, 11) << 1 ) + (GetBits (command, 25, 30)  << 5) + 
+                                      (GetBits (command, 7, 7)  << 11) + (GetBits (command, 31, 31)  << 12);
+            imm                     = ExtendedImm (imm, 12);
+
+            return BranchesHandle (CPU, imm, rs2, rs1, midConst);
+
         }
         default:
-            printf ("Unexpected opcode %d\n", opcode);
-            return -1;
+            printf ("Unknown opcode %d\n", opcode);
+            return 1;
 
     }
 
@@ -323,6 +154,164 @@ static int HandleCommand (const unsigned char* command, State *state) {
 
 }
 
+static int StartParsing (const off_t bufferSize, CPU *CPU) {
+
+    while (CPU->pc < bufferSize) {
+        
+        int err = HandleCommands ((char*) CPU->memory + CPU->pc, CPU);
+        SECURITY_FUNCTION (err != 0, {}, err);
+
+    }
+
+    return 0;
+}
+
+//=========================================================================
+//========================GROUP COMMANDS HANDLING==========================
+//=========================================================================
+static int HandleCommandsGroup1 (const ImmValue midConst, const RegNumber rs2, const RegNumber rs1,
+                                const ImmValue frontConst, const RegNumber rd, CPU* CPU) { //add, sub, xor, or, and
+
+    
+    switch (frontConst) {
+                    
+
+        case 0b000: { //add, xor, or, add
+
+            if (midConst == 0)
+                return ImplAdd (CPU, rs1, rs2, rd);
+            else if (midConst == 4) 
+                return ImplXor (CPU, rs1, rs2, rd);
+            else if (midConst == 6) 
+                return ImplOr  (CPU, rs1, rs2, rd);
+            else if (midConst == 7) 
+                return ImplAnd (CPU, rs1, rs2, rd);
+            
+            return -1;
+        }
+        case 0b100000: //sub
+            return ImplSub  (CPU, rs1, rs2, rd);
+    }
+    return -1;
+}
+
+static int ShiftRecognizer (const ImmValue frontConst, const ImmValue shamt, const RegNumber rs1,
+                            const ImmValue midConst, const RegNumber rd, CPU* CPU) {
+
+    if (midConst == 0b001) //slli
+        return ImplSllI (CPU, shamt, rs1, rd);
+    else if (midConst == 0b101) { //srli or srai
+
+        if (frontConst == 0)//srli 
+            return ImplSrlI (CPU, shamt, rs1, rd);
+        else if (frontConst == 32) //srai
+            return ImplSraI (CPU, shamt, rs1, rd);
+
+    }
+    
+    return -1;
+
+}
+
+static int HandleArithm (const ImmValue imm, const RegNumber rs1, 
+                                const ImmValue midConst, const RegNumber rd, CPU* CPU) {
+    
+    switch (midConst) {
+
+        case 0b000:
+            return ImplAddI     (CPU, imm, rs1, rd);
+        case 0b010:
+            return ImplSltI     (CPU, imm, rs1, rd);
+        case 0b011:
+            return ImplSltIU    (CPU, imm, rs1, rd);
+        case 0b100:
+            return ImplXorI     (CPU, imm, rs1, rd);
+        case 0b110:
+            return ImplOrI      (CPU, imm, rs1, rd);
+        case 0b111:
+            return ImplAddI     (CPU, imm, rs1, rd);
+        default:
+            printf ("Unexpected middle constant in function %s\n", __func__);
+            return -1;
+
+    }
+}
+
+static int HandleCommandsGroup2 (const char* command, const RegNumber rs1,
+                                const ImmValue midConst, const RegNumber rd, CPU* CPU) {
+
+    if (midConst == 0b101 || midConst == 0b001) { //slli, srli, srai 
+
+        ImmValue shamt      = GetBits (command, 20, 24);
+        ImmValue frontConst = GetBits (command, 25, 31);
+
+        return ShiftRecognizer (frontConst, shamt, rs1, midConst, rd, CPU);
+    }
+
+    ImmValue imm    = GetBits (command, 20, 31);
+    imm             = ExtendedImm (imm, 11);
+    
+    return HandleArithm (imm, rs1, midConst, rd, CPU);
+
+}
+
+static int HandleCommandsGroup3 (const ImmValue imm, const RegNumber rs1, const ImmValue midConst, 
+                                const RegNumber rd, CPU* CPU) {
+
+    switch (midConst) {
+
+        case 0b000:
+            return ImplLb (CPU, imm, rs1, rd);
+        case 0b001:
+            return ImplLh (CPU, imm, rs1, rd);
+        case 0b010:
+            return ImplLw (CPU, imm, rs1, rd);
+
+    }
+    return -1;
+}
+
+static int HandleCommandsGroup4 (const ImmValue imm, const RegNumber rs2, const RegNumber rs1,
+                                const ImmValue midConst, CPU* CPU) {
+
+    switch (midConst) {
+
+        case 0b000:
+            return ImplSb (CPU, imm, rs1, rs2);
+        case 0b001:
+            return ImplSh (CPU, imm, rs1, rs2);
+        case 0b010:
+            return ImplSw (CPU, imm, rs1, rs2);
+
+    }
+    return -1;
+}
+
+static int BranchesHandle   (CPU *CPU, const ImmValue imm, const RegNumber rs2, const RegNumber rs1,
+                            const ImmValue midConst) {
+
+    switch (midConst) {
+
+        case 0b000:
+            return ImplBeq  (CPU, imm, rs1, rs2);
+        case 0b001:
+            return ImplBne  (CPU, imm, rs1, rs2);
+        case 0b100:
+            return ImplBlt  (CPU, imm, rs1, rs2);
+        case 0b101:
+            return ImplBge  (CPU, imm, rs1, rs2);
+        case 0b110:
+            return ImplBltU (CPU, imm, rs1, rs2);
+        case 0b111:
+            return ImplBgeU (CPU, imm, rs1, rs2);
+
+    }
+    return -1;
+}
+
+//=========================================================================
+//==================================COMMON=================================
+//=========================================================================
 off_t GetFileSize (const int fd) {
 
     off_t res = lseek (fd, 0, SEEK_END);
@@ -333,3 +322,37 @@ off_t GetFileSize (const int fd) {
 
     return res;
 
+}
+
+static int ReadBuffer (const int inputFile, const off_t fileSize, CPU* CPU) {
+
+    int error = read (inputFile, CPU->memory, (size_t)fileSize);
+    SECURITY_FUNCTION (error != fileSize, {perror ("Bad read from input file");}, errno);
+    
+    return 0;
+    
+}
+
+static ImmValue GetBits (const char* command, const ImmValue start, const ImmValue end) {
+    
+    ImmValue res = 0;
+
+    for (ImmValue i = start; i <= end; i++)
+        res |= ((command [3 - i / 8] >> (i % 8)) & 1) << (i - start); //I know it's terrible...
+
+    return res;
+
+}
+
+static ImmValue ExtendedImm (const ImmValue imm, char startBit) {
+
+    char highestBit = (imm & (1 << startBit)) >> startBit;
+
+    int extendedImm = imm;
+
+    for (int i = startBit + 1; i < 32; i++)
+        extendedImm ^= (highestBit << i);
+
+    return extendedImm;
+
+}
