@@ -17,7 +17,7 @@ static int HandleCommandsGroup1     (const  ImmValue    midConst,   const   RegN
                                     const   ImmValue    frontConst, const   RegNumber rd,           CPU* CPU);
 static int ShiftRecognizer          (const  ImmValue    frontConst, const   ImmValue shamt, const   RegNumber rs1,
                                     const   ImmValue    midConst,   const   RegNumber rd,           CPU* CPU);
-static int HandleArithm     (const  ImmValue    imm,        const   RegNumber rs1, 
+static int HandleArithm             (const  ImmValue    imm,        const   RegNumber rs1, 
                                     const   ImmValue    midConst,   const   RegNumber rd,           CPU* CPU);
 static int HandleCommandsGroup2     (const  char*       command,    const   RegNumber rs1,
                                     const   ImmValue    midConst,   const   RegNumber rd,           CPU* CPU);

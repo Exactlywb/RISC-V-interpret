@@ -52,6 +52,8 @@
 
 #define PC  (CPU->pc)
 
+#define CHECK_RD_X0     if (numRd == 0) return 0
+
 #define MEMORY CPU->memory
 
 //=========================================================================
@@ -63,6 +65,7 @@ char ImplAdd  (CPU* CPU, const RegNumber numRs1, const RegNumber numRs2, const R
     (
         {
             SHOW_REG_BEFORE ("add");
+            CHECK_RD_X0;
             RD = RS1 + RS2;
             SHOW_REG_AFTER_TWO_REGS ("+");
         }
@@ -76,6 +79,7 @@ char ImplAddI (CPU* CPU, const ImmValue imm, const RegNumber numRs1, const RegNu
     (
         {
             SHOW_REG_BEFORE ("addI");
+            CHECK_RD_X0;
             RD = (RegValue)((ImmValue)RS1 + imm);
             SHOW_REG_AFTER_IMM_REG ("+");
         }
@@ -89,6 +93,7 @@ char ImplSub  (CPU* CPU, const RegNumber numRs1, const RegNumber numRs2, const R
     (
         {
             SHOW_REG_BEFORE ("sub");
+            CHECK_RD_X0;
             RD = RS1 - RS2;
             SHOW_REG_AFTER_TWO_REGS ("-");
         }
@@ -105,6 +110,7 @@ char ImplAnd  (CPU* CPU, const RegNumber numRs1, const RegNumber numRs2, const R
     (
         {
             SHOW_REG_BEFORE ("sub");
+            CHECK_RD_X0;
             RD = RS1 & RS2;
             SHOW_REG_AFTER_TWO_REGS ("-");
         }
@@ -118,6 +124,7 @@ char ImplAndI  (CPU* CPU, const ImmValue  imm, const RegNumber numRs1, const Reg
     (
         {
             SHOW_REG_BEFORE ("andI");
+            CHECK_RD_X0;
             RD = (RegValue)((ImmValue)RS1 & imm);
             SHOW_REG_AFTER_IMM_REG ("&");
         }
@@ -131,6 +138,7 @@ char ImplOr    (CPU* CPU, const RegNumber numRs1, const RegNumber numRs2, const 
     (
         {
             SHOW_REG_BEFORE ("or");
+            CHECK_RD_X0;
             RD = RS1 | RS2;
             SHOW_REG_AFTER_TWO_REGS ("|");
         }
@@ -144,6 +152,7 @@ char ImplOrI   (CPU* CPU, const ImmValue imm, const RegNumber numRs1, const RegN
     (
         {
             SHOW_REG_BEFORE ("orI");
+            CHECK_RD_X0;
             RD = (RegValue)((ImmValue)RS1 | imm);
             SHOW_REG_AFTER_IMM_REG ("|");
         }
@@ -157,6 +166,7 @@ char ImplXor   (CPU* CPU, const RegNumber numRs1, const RegNumber numRs2, const 
     (
         {
             SHOW_REG_BEFORE ("xor");
+            CHECK_RD_X0;
             RD = RS1 ^ RS2;
             SHOW_REG_AFTER_TWO_REGS ("^");
         }
@@ -172,6 +182,7 @@ char ImplXorI   (CPU* CPU, const ImmValue  imm, const RegNumber numRs1, const Re
     (
         {
             SHOW_REG_BEFORE ("xorI");
+            CHECK_RD_X0;
             RD = (RegValue)((ImmValue)RS1 ^ imm);
             SHOW_REG_AFTER_IMM_REG ("^");
         }
@@ -188,6 +199,7 @@ char ImplSltI (CPU* CPU, const ImmValue  imm, const RegNumber numRs1, const RegN
     (
         {
             SHOW_REG_BEFORE ("sltI");
+            CHECK_RD_X0;
             if ((SignedRegValue) (RS1) < (SignedRegValue)imm)
                 RD = 1;
             else    
@@ -204,6 +216,7 @@ char ImplSltIU (CPU* CPU, const ImmValue  imm, const RegNumber numRs1, const Reg
     (
         {
             SHOW_REG_BEFORE ("sltIU");
+            CHECK_RD_X0;
             if (RS1 < (RegValue)imm)
                 RD = 1;
             else    
@@ -223,6 +236,7 @@ char ImplSllI (CPU* CPU, const ImmValue  imm, const RegNumber numRs1, const RegN
     (
         {
             SHOW_REG_BEFORE ("sllI");
+            CHECK_RD_X0;
             RD = RS1 << imm;  
 
         }
@@ -236,6 +250,7 @@ char ImplSrlI (CPU* CPU, const ImmValue  imm, const RegNumber numRs1, const RegN
     (
         {
             SHOW_REG_BEFORE ("srlI");
+            CHECK_RD_X0;
             RD = RS1 >> imm;
 
         }
@@ -249,6 +264,7 @@ char ImplSraI (CPU* CPU, const ImmValue  imm, const RegNumber numRs1, const RegN
     (
         {
             SHOW_REG_BEFORE ("sraI");
+            CHECK_RD_X0;
             RD = (RegValue)((SignedRegValue) RS1 >> imm);
             SHOW_REG_AFTER_IMM_REG (">>");
         }
@@ -265,6 +281,7 @@ char ImplLb    (CPU* CPU, const ImmValue imm, const RegNumber numRs1, const RegN
     (
         {
             SHOW_REG_BEFORE ("lb");
+            CHECK_RD_X0;
             RD = (RegValue)((OneByte)(MEMORY [(ImmValue)RS1 + imm]));
 
         }
@@ -278,6 +295,7 @@ char ImplLh    (CPU* CPU, const ImmValue imm, const RegNumber numRs1, const RegN
     (
         {
             SHOW_REG_BEFORE ("lh");
+            CHECK_RD_X0;
             RD = (RegValue) ((TwoBytes)(MEMORY [(ImmValue)RS1 + imm]));
 
         }
@@ -291,6 +309,7 @@ char ImplLw    (CPU* CPU, const ImmValue imm, const RegNumber numRs1, const RegN
     (
         {
             SHOW_REG_BEFORE ("lw");
+            CHECK_RD_X0;
             RD = (RegValue) ((FourBytes)(MEMORY [(ImmValue)RS1 + imm]));
 
         }
@@ -343,6 +362,7 @@ char ImplLui   (CPU* CPU, const ImmValue imm, const RegNumber numRd) {
     (
         {
             SHOW_REG_BEFORE ("lui");
+            CHECK_RD_X0;
             RD = (RegValue)(imm << 12);
         }
     );
@@ -357,6 +377,7 @@ char ImplJal   (CPU* CPU, const ImmValue imm, const RegNumber numRd) {
     IMPL
     (
         {
+            CHECK_RD_X0;
             RD = PC + 4;
             PC = (RegValue)((ImmValue)PC + imm);
         }
@@ -369,6 +390,7 @@ char ImplJalR  (CPU* CPU, const ImmValue imm, const RegNumber numRs1, const RegN
     IMPL
     (
         {
+            CHECK_RD_X0;
             RD = PC + 4;
             PC = (RegValue)((((ImmValue)RS1 + imm) >> 1) << 1);
             PC = PC & ~(1u << 0);
