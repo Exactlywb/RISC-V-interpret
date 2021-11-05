@@ -40,10 +40,10 @@ static int RunParser (const unsigned char* buffer, const off_t bufferSize, State
 
 }
 
-static uint32_t GetBites (const unsigned char* command, const int start, const int end) {
+static int32_t GetBites (const unsigned char* command, const int start, const int end) {
     //!TODO maybe there's the opportunity to optimize this function
 
-    uint32_t res = 0;
+    int32_t res = 0;
 
     for (int i = start; i <= end; i++)
         res |= ((command [3 - i / 8] >> (i % 8)) & 1) << (i - start);
@@ -52,8 +52,8 @@ static uint32_t GetBites (const unsigned char* command, const int start, const i
 
 }
 
-static int FirstOpGroupHandle   (const int frontConst, const int rs2, const int rs1,
-                                const int middleConst, const int rd, State* state) { //add, sub, xor, or, and
+static int FirstOpGroupHandle   (const uint32_t frontConst, const uint32_t rs2, const uint32_t rs1,
+                                const uint32_t middleConst, const uint32_t rd, State* state) { //add, sub, xor, or, and
 
     switch (middleConst) {
 
@@ -100,10 +100,30 @@ static int HandleShifts (const uint32_t frontConst, const uint32_t shamt, const 
 
 static int HandleArithWithInt   (const uint32_t imm, const uint32_t rs1, 
                                 const uint32_t middleConst, const uint32_t rd, State* state) {
+    
+    char highestBit = (imm & (1 << 11)) >> 11;
+    printf ("highestBit = %d\n", highestBit);
+    int extendedImm = imm;
+    for (int i = 0; i < 31; i++) {
+        printf ("%d ", (imm & (1 << (31 - i))) >> (31 - i));
+        extendedImm |= imm & (1 << (31 - i));
+    }
 
+    for (int i = 12; i < 32; i++)
+        extendedImm ^= (highestBit << i);
+
+    printf ("extendedImm = %d\n", extendedImm);
+
+    // int32_t highestBit = (imm >> 11) & 1;
+    // int32_t extendedImm = imm ^ (highestBit << 11);
+    // extendedImm |= (highestBit << 31);
+
+    printf ("extended %d\n", extendedImm);
+    
     switch (middleConst) {
 
         case 0b000:
+            printf ("addi\n");
             return ImplAddI     (state, imm, rs1, rd);
         case 0b010:
             return ImplSltI     (state, imm, rs1, rd);
@@ -135,7 +155,7 @@ static int SecondOpGroupHandle (const unsigned char* command, const uint32_t rs1
 
     }
 
-    uint32_t imm = GetBites (command, 20, 31);
+    ImmValue imm = GetBites (command, 20, 31);
 
     return HandleArithWithInt (imm, rs1, middleConst, rd, state);
     
@@ -280,7 +300,7 @@ static int HandleCommand (const unsigned char* command, State *state) {
         case seventhOpGroup: { //jalr
 
             uint32_t rd          = GetBites (command, 7, 11);
-            uint32_t magicConst  = GetBites (command, 12, 14);
+            // uint32_t magicConst  = GetBites (command, 12, 14);
             uint32_t rs1         = GetBites (command, 15, 19);
 
             uint32_t imm         = GetBites (command, 20, 31);
